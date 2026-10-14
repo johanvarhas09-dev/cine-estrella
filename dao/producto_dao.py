@@ -1,51 +1,107 @@
-from dao.dao import DAO
-from model.producto_dulceria import ProductoDulceria
+"""
+DAO para la entidad Producto y sus subtipos ProductoNacional y ProductoImportado.
+"""
+from dao.conexion import obtener_conexion
+from model.producto import Producto
+from model.producto_nacional import ProductoNacional
+from model.producto_importado import ProductoImportado
+from model.excepciones import ReglaNegocioException
 
 
-class ProductoDAO(DAO):
-    def crear_tabla(self) -> None:
-        with self.conexion:
-            self.cursor.execute("""
-                CREATE TABLE IF NOT EXISTS producto_dulceria (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    descripcion TEXT NOT NULL,
-                    precio_base REAL NOT NULL CHECK (precio_base > 0),
-                    importado INTEGER NOT NULL CHECK (importado IN (0, 1))
-                )
-            """)
+class ProductoDAO:
+    @staticmethod
+    def _instanciar(row) -> Producto:
+        tipo = row["tipo"].lower()
+        if tipo == "importado":
+            return ProductoImportado(
+                id_producto=row["id_producto"],
+                nombre=row["nombre"],
+                precio_base_usd=row["precio_base"]
+            )
+        else:
+            return ProductoNacional(
+                id_producto=row["id_producto"],
+                nombre=row["nombre"],
+                precio_base=row["precio_base"]
+            )
 
     @staticmethod
-    def __crear_objeto(fila: tuple) -> ProductoDulceria:
-        # SQLite guarda el booleano como 0/1; se convierte de vuelta a bool
-        return ProductoDulceria(fila[1], fila[2], bool(fila[3]), fila[0])
+    def crear(producto: Producto) -> Producto:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO productos (nombre, precio_base, tipo)
+            VALUES (?, ?, ?)
+            """,
+            (producto.nombre, producto.precio_base, producto.tipo)
+        )
+        producto.id_producto = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return producto
 
-    def insertar(self, producto: ProductoDulceria) -> None:
-        with self.conexion:
-            self.cursor.execute("INSERT INTO producto_dulceria (descripcion, precio_base, importado) VALUES (?, ?, ?)",
-                                (producto.descripcion, producto.precio_base, int(producto.importado)))
-        producto.id = self.cursor.lastrowid
+    @staticmethod
+    def listar() -> list[Producto]:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_producto, nombre, precio_base, tipo FROM productos ORDER BY id_producto")
+        rows = cursor.fetchall()
+        conn.close()
+        return [ProductoDAO._instanciar(r) for r in rows]
 
-    def buscar(self, id: int) -> ProductoDulceria | None:
-        self.cursor.execute("SELECT id, descripcion, precio_base, importado FROM producto_dulceria WHERE id = ?",
-                            (id,))
-        fila = self.cursor.fetchone()
-        if fila is None:
-            return None
-        return self.__crear_objeto(fila)
+    @staticmethod
+    def obtener_por_id(id_producto: int) -> Producto | None:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id_producto, nombre, precio_base, tipo FROM productos WHERE id_producto = ?",
+            (id_producto,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return ProductoDAO._instanciar(row)
+        return None
 
-    def listar(self) -> list[ProductoDulceria]:
-        self.cursor.execute("SELECT id, descripcion, precio_base, importado FROM producto_dulceria ORDER BY id")
-        return [self.__crear_objeto(fila) for fila in self.cursor.fetchall()]
+    @staticmethod
+    def modificar(producto: Producto) -> bool:
+        if not producto.id_producto:
+            raise ValueError("El producto a modificar debe tener un ID válido.")
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE productos
+            SET nombre = ?, precio_base = ?, tipo = ?
+            WHERE id_producto = ?
+            """,
+            (producto.nombre, producto.precio_base, producto.tipo, producto.id_producto)
+        )
+        modificados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return modificados > 0
 
-    def actualizar(self, producto: ProductoDulceria) -> bool:
-        with self.conexion:
-            self.cursor.execute("""
-                UPDATE producto_dulceria SET descripcion = ?, precio_base = ?, importado = ? WHERE id = ?
-            """, (producto.descripcion, producto.precio_base, int(producto.importado), producto.id))
-        return self.cursor.rowcount > 0
+    @staticmethod
+    def eliminar(id_producto: int) -> bool:
+        """Impide la eliminación si el producto tiene ventas asociadas."""
+        conn = obtener_conexion()
+        cursor = conn.cursor()
 
-    def eliminar(self, id: int) -> bool:
-        # Si el producto aparece en alguna venta, la clave foránea lo impide (sqlite3.IntegrityError)
-        with self.conexion:
-            self.cursor.execute("DELETE FROM producto_dulceria WHERE id = ?", (id,))
-        return self.cursor.rowcount > 0
+        cursor.execute(
+            "SELECT COUNT(*) FROM detalle_ventas WHERE tipo_item = 'producto' AND id_item = ?",
+            (id_producto,)
+        )
+        conteo = cursor.fetchone()[0]
+        if conteo > 0:
+            conn.close()
+            raise ReglaNegocioException(
+                f"No se puede eliminar el producto (ID {id_producto}) porque ya registra {conteo} venta(s) asociada(s)."
+            )
+
+        cursor.execute("DELETE FROM productos WHERE id_producto = ?", (id_producto,))
+        eliminados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return eliminados > 0

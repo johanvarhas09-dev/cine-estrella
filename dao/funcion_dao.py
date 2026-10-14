@@ -1,106 +1,167 @@
-from datetime import datetime
-
-from dao.dao import DAO
+"""
+DAO para la entidad Funcion y sus subtipos (Funcion2D, Funcion3D, FuncionVIP).
+Reconstruye las instancias polimórficas adecuadas e impide la eliminación si registra ventas.
+"""
+from dao.conexion import obtener_conexion
+from dao.pelicula_dao import PeliculaDAO
 from model.funcion import Funcion
 from model.funcion_2d import Funcion2D
 from model.funcion_3d import Funcion3D
 from model.funcion_vip import FuncionVIP
-from model.pelicula import Pelicula
-
-# Consultas de lectura: traen la función junto con su película, en el orden que espera __crear_objeto()
-SQL_BUSCAR = """
-    SELECT f.id, f.tipo, f.fecha_hora, f.precio_base, f.asientos_totales, f.asientos_vendidos,
-           f.recargo, f.asientos_vip, p.id, p.titulo, p.duracion_min, p.edad_minima
-    FROM funcion f JOIN pelicula p ON p.id = f.pelicula_id
-    WHERE f.id = ?
-"""
-SQL_LISTAR = """
-    SELECT f.id, f.tipo, f.fecha_hora, f.precio_base, f.asientos_totales, f.asientos_vendidos,
-           f.recargo, f.asientos_vip, p.id, p.titulo, p.duracion_min, p.edad_minima
-    FROM funcion f JOIN pelicula p ON p.id = f.pelicula_id
-    ORDER BY f.fecha_hora, f.id
-"""
+from model.excepciones import ReglaNegocioException
 
 
-class FuncionDAO(DAO):
-    def crear_tabla(self) -> None:
-        with self.conexion:
-            self.cursor.execute("""
-                CREATE TABLE IF NOT EXISTS funcion (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tipo TEXT NOT NULL CHECK (tipo IN ('2D', '3D', 'VIP')),
-                    pelicula_id INTEGER NOT NULL,
-                    fecha_hora TEXT NOT NULL,
-                    precio_base INTEGER NOT NULL CHECK (precio_base > 0),
-                    asientos_totales INTEGER NOT NULL CHECK (asientos_totales > 0),
-                    asientos_vendidos INTEGER NOT NULL DEFAULT 0
-                        CHECK (asientos_vendidos BETWEEN 0 AND asientos_totales),
-                    recargo INTEGER,
-                    asientos_vip INTEGER,
-                    FOREIGN KEY (pelicula_id) REFERENCES pelicula(id)
-                )
-            """)
+class FuncionDAO:
+    @staticmethod
+    def _instanciar(row) -> Funcion:
+        pelicula = PeliculaDAO.obtener_por_id(row["id_pelicula"])
+        if not pelicula:
+            from model.pelicula import Pelicula
+            pelicula = Pelicula(id_pelicula=row["id_pelicula"], titulo="Desconocida", clasificacion_edad=0)
+
+        tipo = row["tipo"].upper()
+        kwargs = {
+            "id_funcion": row["id_funcion"],
+            "pelicula": pelicula,
+            "fecha_hora": row["fecha_hora"],
+            "precio_base": row["precio_base"],
+            "capacidad": row["capacidad"],
+            "asientos_disponibles": row["asientos_disponibles"]
+        }
+
+        if tipo == "2D":
+            return Funcion2D(**kwargs)
+        elif tipo == "3D":
+            recargo = row["recargo"] if "recargo" in row.keys() else Funcion3D.RECARGO_3D_DEFAULT
+            return Funcion3D(recargo_3d=recargo, **kwargs)
+        elif tipo == "VIP":
+            recargo = row["recargo"] if "recargo" in row.keys() else FuncionVIP.RECARGO_VIP_DEFAULT
+            return FuncionVIP(recargo_vip=recargo, **kwargs)
+        else:
+            return Funcion(tipo=tipo, **kwargs)
 
     @staticmethod
-    def __datos_subtipo(funcion: Funcion) -> tuple:
-        # Solo el DAO necesita conocer el subtipo, para guardar sus columnas propias.
-        # El precio nunca se calcula aquí: eso lo resuelve cada subtipo con calcular_precio().
+    def crear(funcion: Funcion) -> Funcion:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        recargo = 0.0
         if isinstance(funcion, Funcion3D):
-            return "3D", funcion.recargo_3d, None
-        if isinstance(funcion, FuncionVIP):
-            return "VIP", funcion.recargo_vip, funcion.asientos_vip
-        return "2D", None, None
+            recargo = funcion.recargo_3d
+        elif isinstance(funcion, FuncionVIP):
+            recargo = funcion.recargo_vip
+
+        cursor.execute(
+            """
+            INSERT INTO funciones (
+                id_pelicula, tipo, fecha_hora, precio_base,
+                capacidad, asientos_disponibles, recargo
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                funcion.pelicula.id_pelicula,
+                funcion.tipo,
+                funcion.fecha_hora,
+                funcion.precio_base,
+                funcion.capacidad,
+                funcion.asientos_disponibles,
+                recargo
+            )
+        )
+        funcion.id_funcion = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return funcion
 
     @staticmethod
-    def __crear_objeto(fila: tuple) -> Funcion:
-        (id, tipo, fecha_hora, precio_base, asientos_totales, asientos_vendidos,
-         recargo, asientos_vip, pelicula_id, titulo, duracion_min, edad_minima) = fila
-        pelicula = Pelicula(titulo, duracion_min, edad_minima, pelicula_id)
-        fecha = datetime.fromisoformat(fecha_hora)
-        # La columna "tipo" indica qué subclase reconstruir a partir de la fila
-        if tipo == "3D":
-            return Funcion3D(pelicula, fecha, precio_base, asientos_totales, recargo, asientos_vendidos, id)
-        if tipo == "VIP":
-            return FuncionVIP(pelicula, fecha, precio_base, asientos_totales, recargo, asientos_vip,
-                              asientos_vendidos, id)
-        return Funcion2D(pelicula, fecha, precio_base, asientos_totales, asientos_vendidos, id)
+    def listar() -> list[Funcion]:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM funciones ORDER BY fecha_hora, id_funcion")
+        rows = cursor.fetchall()
+        conn.close()
+        return [FuncionDAO._instanciar(r) for r in rows]
 
-    def insertar(self, funcion: Funcion) -> None:
-        tipo, recargo, asientos_vip = self.__datos_subtipo(funcion)
-        with self.conexion:
-            self.cursor.execute("""
-                INSERT INTO funcion (tipo, pelicula_id, fecha_hora, precio_base, asientos_totales,
-                                     asientos_vendidos, recargo, asientos_vip)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (tipo, funcion.pelicula.id, funcion.fecha_hora.isoformat(sep=" ", timespec="minutes"),
-                  funcion.precio_base, funcion.asientos_totales, funcion.asientos_vendidos, recargo, asientos_vip))
-        funcion.id = self.cursor.lastrowid
+    @staticmethod
+    def obtener_por_id(id_funcion: int) -> Funcion | None:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM funciones WHERE id_funcion = ?", (id_funcion,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return FuncionDAO._instanciar(row)
+        return None
 
-    def buscar(self, id: int) -> Funcion | None:
-        self.cursor.execute(SQL_BUSCAR, (id,))
-        fila = self.cursor.fetchone()
-        if fila is None:
-            return None
-        return self.__crear_objeto(fila)
+    @staticmethod
+    def modificar(funcion: Funcion) -> bool:
+        if not funcion.id_funcion:
+            raise ValueError("La función debe tener un ID válido para ser modificada.")
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        recargo = 0.0
+        if isinstance(funcion, Funcion3D):
+            recargo = funcion.recargo_3d
+        elif isinstance(funcion, FuncionVIP):
+            recargo = funcion.recargo_vip
 
-    def listar(self) -> list[Funcion]:
-        self.cursor.execute(SQL_LISTAR)
-        return [self.__crear_objeto(fila) for fila in self.cursor.fetchall()]
+        cursor.execute(
+            """
+            UPDATE funciones
+            SET id_pelicula = ?, tipo = ?, fecha_hora = ?, precio_base = ?,
+                capacidad = ?, asientos_disponibles = ?, recargo = ?
+            WHERE id_funcion = ?
+            """,
+            (
+                funcion.pelicula.id_pelicula,
+                funcion.tipo,
+                funcion.fecha_hora,
+                funcion.precio_base,
+                funcion.capacidad,
+                funcion.asientos_disponibles,
+                recargo,
+                funcion.id_funcion
+            )
+        )
+        modificados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return modificados > 0
 
-    def actualizar(self, funcion: Funcion) -> bool:
-        # asientos_vendidos no se edita aquí: solo cambia al guardar una venta (VentaDAO)
-        tipo, recargo, asientos_vip = self.__datos_subtipo(funcion)
-        with self.conexion:
-            self.cursor.execute("""
-                UPDATE funcion SET pelicula_id = ?, fecha_hora = ?, precio_base = ?, asientos_totales = ?,
-                                   recargo = ?, asientos_vip = ?
-                WHERE id = ? AND tipo = ?
-            """, (funcion.pelicula.id, funcion.fecha_hora.isoformat(sep=" ", timespec="minutes"),
-                  funcion.precio_base, funcion.asientos_totales, recargo, asientos_vip, funcion.id, tipo))
-        return self.cursor.rowcount > 0
+    @staticmethod
+    def actualizar_asientos(id_funcion: int, nuevos_asientos_disponibles: int) -> bool:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE funciones SET asientos_disponibles = ? WHERE id_funcion = ?",
+            (nuevos_asientos_disponibles, id_funcion)
+        )
+        actualizados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return actualizados > 0
 
-    def eliminar(self, id: int) -> bool:
-        # Si la función ya tiene entradas vendidas, la clave foránea lo impide (sqlite3.IntegrityError)
-        with self.conexion:
-            self.cursor.execute("DELETE FROM funcion WHERE id = ?", (id,))
-        return self.cursor.rowcount > 0
+    @staticmethod
+    def eliminar(id_funcion: int) -> bool:
+        """
+        Impide la eliminación si la función ya posee boletos/entradas vendidas en detalle_ventas.
+        """
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM detalle_ventas WHERE tipo_item = 'entrada' AND id_item = ?",
+            (id_funcion,)
+        )
+        ventas_asociadas = cursor.fetchone()[0]
+        if ventas_asociadas > 0:
+            conn.close()
+            raise ReglaNegocioException(
+                f"No se puede eliminar la función (ID {id_funcion}) porque ya tiene {ventas_asociadas} venta(s) asociada(s)."
+            )
+
+        cursor.execute("DELETE FROM funciones WHERE id_funcion = ?", (id_funcion,))
+        eliminados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return eliminados > 0

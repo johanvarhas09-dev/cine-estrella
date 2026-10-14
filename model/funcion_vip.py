@@ -1,41 +1,53 @@
-from datetime import datetime
-
+"""
+Subtipo FuncionVIP: Sala premium con servicio de confort y asientos limitados (Caso P11).
+Aplica polimorfismo mediante recargo VIP y control estricto de cupos reducidos.
+"""
 from model.funcion import Funcion
 from model.pelicula import Pelicula
-from model.validacion import entero_en_rango
 
 
 class FuncionVIP(Funcion):
-    """Función VIP: tiene recargo propio y un cupo limitado de asientos VIP."""
+    # [REGLA DE NEGOCIO: SALA VIP]
+    # La capacidad máxima de una sala VIP está estrictamente acotada a 30 asientos (exigencia del cliente).
+    # Posee además un recargo premium por amenidades exclusivas (reclinación, atención a la butaca).
+    RECARGO_VIP_DEFAULT = 3000.0
+    CAPACIDAD_MAX_VIP = 30
 
-    def __init__(self, pelicula: Pelicula, fecha_hora: datetime, precio_base: int, asientos_totales: int,
-                 recargo_vip: int, asientos_vip: int, asientos_vendidos: int = 0, id: int | None = None):
-        super().__init__(pelicula, fecha_hora, precio_base, asientos_totales, asientos_vendidos, id)
-        self.recargo_vip = recargo_vip
-        self.asientos_vip = asientos_vip
+    def __init__(
+        self,
+        id_funcion: int | None,
+        pelicula: Pelicula,
+        fecha_hora: str,
+        precio_base: float,
+        capacidad: int = CAPACIDAD_MAX_VIP,
+        asientos_disponibles: int | None = None,
+        recargo_vip: float = RECARGO_VIP_DEFAULT
+    ):
+        super().__init__(
+            id_funcion=id_funcion,
+            pelicula=pelicula,
+            tipo="VIP",
+            fecha_hora=fecha_hora,
+            precio_base=precio_base,
+            capacidad=capacidad,
+            asientos_disponibles=asientos_disponibles
+        )
+        self._recargo_vip = recargo_vip
 
     @property
-    def recargo_vip(self) -> int:
-        return self.__recargo_vip
+    def recargo_vip(self) -> float:
+        return self._recargo_vip
 
     @recargo_vip.setter
-    def recargo_vip(self, valor: int) -> None:
-        self.__recargo_vip = entero_en_rango(valor, 0, 50000, "El recargo VIP")
+    def recargo_vip(self, valor: float):
+        try:
+            val_flt = float(valor)
+        except (ValueError, TypeError):
+            raise ValueError("El recargo VIP debe ser un valor numérico.")
+        if val_flt < 0:
+            raise ValueError("El recargo VIP no puede ser negativo.")
+        self._recargo_vip = val_flt
 
-    @property
-    def asientos_vip(self) -> int:
-        return self.__asientos_vip
-
-    @asientos_vip.setter
-    def asientos_vip(self, valor: int) -> None:
-        entero_en_rango(valor, 1, self.asientos_totales, "Los asientos VIP")
-        if valor < self.asientos_vendidos:
-            raise ValueError(f"No se puede bajar el cupo VIP a {valor}: ya hay {self.asientos_vendidos} vendidos.")
-        self.__asientos_vip = valor
-
-    def calcular_precio(self) -> int:
-        return self.precio_base + self.__recargo_vip
-
-    def asientos_disponibles(self) -> int:
-        # La función VIP no vende toda la sala: solo su cupo limitado de asientos VIP
-        return min(self.asientos_totales, self.__asientos_vip) - self.asientos_vendidos
+    def calcular_precio(self) -> float:
+        """La función VIP añade un recargo premium sobre el precio base."""
+        return self._precio_base + self._recargo_vip

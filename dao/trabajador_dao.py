@@ -1,55 +1,156 @@
-from dao.dao import DAO
+"""
+DAO para Trabajador y sus subtipos Boletero y EncargadoDulceria.
+"""
+from dao.conexion import obtener_conexion
+from model.trabajador import Trabajador
 from model.boletero import Boletero
 from model.encargado_dulceria import EncargadoDulceria
-from model.trabajador import Trabajador
+from model.excepciones import ReglaNegocioException
 
 
-class TrabajadorDAO(DAO):
-    # Traducción entre el subtipo de Python y el texto que se guarda en la columna "tipo"
-    TIPO_POR_CLASE = {Boletero: "BOLETERO", EncargadoDulceria: "ENCARGADO_DULCERIA"}
-    CLASE_POR_TIPO = {"BOLETERO": Boletero, "ENCARGADO_DULCERIA": EncargadoDulceria}
+class TrabajadorDAO:
+    @staticmethod
+    def _instanciar(row) -> Trabajador:
+        rol = row["rol"].lower()
+        pwd_plano = row["password_plano"] if "password_plano" in row.keys() and row["password_plano"] else ""
+        kwargs = {
+            "id_trabajador": row["id_trabajador"],
+            "nombre": row["nombre"],
+            "username": row["username"],
+            "password_hash": row["password_hash"],
+            "password_plano": pwd_plano
+        }
+        if rol == "boletero":
+            return Boletero(**kwargs)
+        elif rol == "dulceria":
+            return EncargadoDulceria(**kwargs)
+        else:
+            return Trabajador(rol=rol, **kwargs)
 
-    def crear_tabla(self) -> None:
-        with self.conexion:
-            self.cursor.execute("""
-                CREATE TABLE IF NOT EXISTS trabajador (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nombre TEXT NOT NULL,
-                    caja INTEGER NOT NULL CHECK (caja BETWEEN 1 AND 20),
-                    tipo TEXT NOT NULL CHECK (tipo IN ('BOLETERO', 'ENCARGADO_DULCERIA'))
-                )
-            """)
+    @staticmethod
+    def crear(trabajador: Trabajador) -> Trabajador:
+        if trabajador.username.strip().lower() == "admin":
+            raise ReglaNegocioException("El usuario 'admin' es una funcionalidad reservada del sistema.")
 
-    def __crear_objeto(self, fila: tuple) -> Trabajador:
-        clase = self.CLASE_POR_TIPO[fila[3]]
-        return clase(fila[1], fila[2], fila[0])
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO trabajadores (nombre, username, password_hash, rol, password_plano)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                trabajador.nombre,
+                trabajador.username,
+                trabajador.password_hash,
+                trabajador.rol,
+                getattr(trabajador, 'password_plano', '')
+            )
+        )
+        trabajador.id_trabajador = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return trabajador
 
-    def insertar(self, trabajador: Trabajador) -> None:
-        with self.conexion:
-            self.cursor.execute("INSERT INTO trabajador (nombre, caja, tipo) VALUES (?, ?, ?)",
-                                (trabajador.nombre, trabajador.caja, self.TIPO_POR_CLASE[type(trabajador)]))
-        trabajador.id = self.cursor.lastrowid
+    @staticmethod
+    def listar() -> list[Trabajador]:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_trabajador, nombre, username, password_hash, rol, password_plano FROM trabajadores ORDER BY id_trabajador")
+        rows = cursor.fetchall()
+        conn.close()
+        return [TrabajadorDAO._instanciar(r) for r in rows]
 
-    def buscar(self, id: int) -> Trabajador | None:
-        self.cursor.execute("SELECT id, nombre, caja, tipo FROM trabajador WHERE id = ?", (id,))
-        fila = self.cursor.fetchone()
-        if fila is None:
-            return None
-        return self.__crear_objeto(fila)
+    @staticmethod
+    def obtener_por_id(id_trabajador: int) -> Trabajador | None:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id_trabajador, nombre, username, password_hash, rol, password_plano FROM trabajadores WHERE id_trabajador = ?",
+            (id_trabajador,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return TrabajadorDAO._instanciar(row)
+        return None
 
-    def listar(self) -> list[Trabajador]:
-        self.cursor.execute("SELECT id, nombre, caja, tipo FROM trabajador ORDER BY id")
-        return [self.__crear_objeto(fila) for fila in self.cursor.fetchall()]
+    @staticmethod
+    def obtener_por_username(username: str) -> Trabajador | None:
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id_trabajador, nombre, username, password_hash, rol, password_plano FROM trabajadores WHERE username = ?",
+            (username.strip().lower(),)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return TrabajadorDAO._instanciar(row)
+        return None
 
-    def actualizar(self, trabajador: Trabajador) -> bool:
-        # El tipo no se modifica: un boletero no se convierte en encargado de dulcería
-        with self.conexion:
-            self.cursor.execute("UPDATE trabajador SET nombre = ?, caja = ? WHERE id = ?",
-                                (trabajador.nombre, trabajador.caja, trabajador.id))
-        return self.cursor.rowcount > 0
+    @staticmethod
+    def modificar(trabajador: Trabajador) -> bool:
+        if not trabajador.id_trabajador:
+            raise ValueError("El trabajador a modificar debe tener un ID válido.")
+        conn = obtener_conexion()
+        cursor = conn.cursor()
 
-    def eliminar(self, id: int) -> bool:
-        # Si el trabajador ya registró ventas, la clave foránea lo impide (sqlite3.IntegrityError)
-        with self.conexion:
-            self.cursor.execute("DELETE FROM trabajador WHERE id = ?", (id,))
-        return self.cursor.rowcount > 0
+        # Si el trabajador actual en base de datos es admin, no permitir cambiar su username ni rol
+        cursor.execute("SELECT username, rol FROM trabajadores WHERE id_trabajador = ?", (trabajador.id_trabajador,))
+        orig = cursor.fetchone()
+        if orig and (orig["username"].strip().lower() == "admin" or orig["rol"].strip().lower() == "admin"):
+            trabajador.username = "admin"
+            trabajador.rol = "admin"
+
+        cursor.execute(
+            """
+            UPDATE trabajadores
+            SET nombre = ?, username = ?, password_hash = ?, rol = ?, password_plano = ?
+            WHERE id_trabajador = ?
+            """,
+            (
+                trabajador.nombre,
+                trabajador.username,
+                trabajador.password_hash,
+                trabajador.rol,
+                getattr(trabajador, 'password_plano', ''),
+                trabajador.id_trabajador
+            )
+        )
+        modificados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return modificados > 0
+
+    @staticmethod
+    def eliminar(id_trabajador: int) -> bool:
+        """Impide la eliminación de la cuenta de administración y de trabajadores con ventas."""
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT username, rol FROM trabajadores WHERE id_trabajador = ?", (id_trabajador,))
+        row_t = cursor.fetchone()
+        if not row_t:
+            conn.close()
+            return False
+
+        if row_t["username"].strip().lower() == "admin" or row_t["rol"].strip().lower() == "admin":
+            conn.close()
+            raise ReglaNegocioException(
+                "La cuenta del Administrador ('admin') es una funcionalidad reservada del sistema y no puede ser eliminada."
+            )
+
+        cursor.execute("SELECT COUNT(*) FROM detalle_ventas WHERE id_trabajador = ?", (id_trabajador,))
+        ventas_asociadas = cursor.fetchone()[0]
+        if ventas_asociadas > 0:
+            conn.close()
+            raise ReglaNegocioException(
+                f"No se puede eliminar el trabajador (ID {id_trabajador}) porque registra {ventas_asociadas} transacción(es) en ventas."
+            )
+
+        cursor.execute("DELETE FROM trabajadores WHERE id_trabajador = ?", (id_trabajador,))
+        eliminados = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return eliminados > 0

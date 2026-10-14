@@ -1,42 +1,48 @@
-from dao.dao import DAO
+"""
+DAO para gestión de Clientes en base de datos.
+"""
+from dao.conexion import obtener_conexion
 from model.cliente import Cliente
 
 
-class ClienteDAO(DAO):
-    def crear_tabla(self) -> None:
-        with self.conexion:
-            self.cursor.execute("""
-                CREATE TABLE IF NOT EXISTS cliente (
-                    rut TEXT PRIMARY KEY,
-                    nombre TEXT NOT NULL,
-                    edad INTEGER NOT NULL CHECK (edad BETWEEN 0 AND 120)
-                )
-            """)
+class ClienteDAO:
+    @staticmethod
+    def guardar_o_actualizar(cliente: Cliente) -> Cliente:
+        """
+        [PERSISTENCIA SEGURA: UPSERT DE CLIENTE]
+        Inserta un nuevo cliente o actualiza su nombre y edad si el RUT ya existe (ON CONFLICT).
+        Utiliza marcadores de posición '?' para prevenir inyección SQL.
+        """
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO clientes (rut, nombre, edad)
+            VALUES (?, ?, ?)
+            ON CONFLICT(rut) DO UPDATE SET
+                nombre = excluded.nombre,
+                edad = excluded.edad
+            """,
+            (cliente.rut, cliente.nombre, cliente.edad)
+        )
+        conn.commit()
+        conn.close()
+        return cliente
 
-    def insertar(self, cliente: Cliente) -> None:
-        with self.conexion:
-            self.cursor.execute("INSERT INTO cliente (rut, nombre, edad) VALUES (?, ?, ?)",
-                                (cliente.rut, cliente.nombre, cliente.edad))
-
-    def buscar(self, rut: str) -> Cliente | None:
-        self.cursor.execute("SELECT rut, nombre, edad FROM cliente WHERE rut = ?", (rut,))
-        fila = self.cursor.fetchone()
-        if fila is None:
-            return None
-        return Cliente(fila[0], fila[1], fila[2])
-
-    def listar(self) -> list[Cliente]:
-        self.cursor.execute("SELECT rut, nombre, edad FROM cliente ORDER BY nombre")
-        return [Cliente(fila[0], fila[1], fila[2]) for fila in self.cursor.fetchall()]
-
-    def actualizar(self, cliente: Cliente) -> bool:
-        with self.conexion:
-            self.cursor.execute("UPDATE cliente SET nombre = ?, edad = ? WHERE rut = ?",
-                                (cliente.nombre, cliente.edad, cliente.rut))
-        return self.cursor.rowcount > 0
-
-    def eliminar(self, rut: str) -> bool:
-        # Si el cliente tiene ventas, la clave foránea lo impide (sqlite3.IntegrityError)
-        with self.conexion:
-            self.cursor.execute("DELETE FROM cliente WHERE rut = ?", (rut,))
-        return self.cursor.rowcount > 0
+    @staticmethod
+    def obtener_por_rut(rut: str) -> Cliente | None:
+        """
+        [BÚSQUEDA PARAMETRIZADA POR RUT]
+        Normaliza el RUT consultado a formato canónico antes de buscar en la BD.
+        Retorna la entidad de dominio Cliente o None si no existe.
+        """
+        cuerpo, dv = Cliente.limpiar_rut(rut)
+        rut_formateado = f"{cuerpo}-{dv}"
+        conn = obtener_conexion()
+        cursor = conn.cursor()
+        cursor.execute("SELECT rut, nombre, edad FROM clientes WHERE rut = ?", (rut_formateado,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return Cliente(rut=row["rut"], nombre=row["nombre"], edad=row["edad"])
+        return None

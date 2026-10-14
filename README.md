@@ -1,177 +1,338 @@
-# Cine Estrella: sistema de venta de entradas y dulcería
+# 🎬 CINE ESTRELLA — SISTEMA INTEGRAL DE GESTIÓN (VERSIÓN 4.0 GUI + CLI)
 
-Evaluación Sumativa N°2 · Programación Orientada a Objeto Seguro (TI3V21) · Sección 114-2A-F2 · INACAP Puente Alto
+**Asignatura:** Programación Orientada a Objetos Segura  
+**Institución:** INACAP — Sede Puente Alto (2026)  
+**Docente:** Michael Alexis Arjel Mayerovich  
+**Integrantes del Equipo:**
+* Fernando Durán
+* Johan Vargas
 
-| | |
-|---|---|
-| **Negocio** | 11 - Cine |
-| **Integrantes** | Fernando A. Durán Leiva · Johan Patrichs Vargas Catalán |
-| **Docente** | Michael Arjel |
-
-El sistema administra la venta de entradas y de productos de dulcería de un cine. Una misma venta junta
-entradas (las vende el boletero) y productos (los vende el encargado de dulcería, en su propia caja).
-Antes de vender una entrada se revisa que la función tenga asientos y que el cliente tenga la edad mínima
-de la película. Los productos importados se cotizan con el dólar del día, que se obtiene de la API pública
-de [mindicador.cl](https://mindicador.cl).
+**Caso de Negocio:** 11 – CINE ESTRELLA
 
 ---
 
-## 1. Instalación y ejecución
+## 📋 Tabla de Contenidos
 
-Requisitos: **Python 3.10 o superior** y conexión a internet (solo para el dólar del día).
+1. [Descripción del Negocio](#descripción-del-negocio)
+2. [Documentación y Manuales del Sistema](#-documentación-y-manuales-del-sistema)
+3. [Versiones Disponibles](#versiones-disponibles)
+4. [Instalación y Ejecución](#instalación-y-ejecución)
+5. [Estructura del Proyecto](#estructura-del-proyecto)
+6. [Funcionalidades](#funcionalidades)
+7. [Seguridad](#seguridad)
+8. [Pruebas](#pruebas)
+9. [Historial de Cambios](#historial-de-cambios)
 
-```bash
-git clone https://github.com/johanvarhas09-dev/cine-estrella.git
-cd cine-estrella
-python -m venv venv
-venv\Scripts\activate            # Windows (en Linux o macOS: source venv/bin/activate)
-pip install -r requirements.txt
+---
+
+## 📚 Documentación y Manuales del Sistema
+
+El proyecto cuenta con documentación técnica formal y manuales de operación organizados en el directorio [`docs/`](docs/):
+
+* **[Manual de Usuario por Funciones](docs/manual_usuario.md):** Guía paso a paso para Administrador, Boletero y Encargado de Dulcería, con instrucciones de inicio, venta, contingencias y resolución de incidentes.
+* **[Manual Técnico de Arquitectura y Código](docs/manual_tecnico_codigo.md):** Documento de arquitectura de software, patrones de diseño, modelos relacionales DDL, diagramas de clases, algoritmos clave y configuración de CI.
+* **[Catálogo y Trazabilidad de Comentarios en el Código](docs/referencia_comentarios_codigo.md):** Mapeo de comentarios explicativos archivo por archivo, vinculando cada requerimiento del negocio y caso de prueba (P01–P19) con el código fuente.
+
+---
+
+## Descripción del Negocio
+
+El negocio **CINE ESTRELLA** requiere un sistema informático de escritorio con interfaz gráfica moderna y temática cinematográfica (Tkinter) para la administración y venta presencial de entradas y confitería.
+
+### Funcionalidades Clave
+
+- **Boletería:** Venta de entradas para funciones de cine
+- **Confitería:** Venta de snacks y bebidas
+- **Ventas Combinadas:** Un cliente puede comprar entradas y confites en la misma transacción
+- **Control de Asientos:** Stock dinámico por función
+- **Validación de Edad:** Para películas clasificadas con validación de RUT Módulo 11
+- **Cotización en Dólares:** Cálculo automático USD → CLP para productos importados
+
+---
+
+## Versiones Disponibles
+
+El repositorio contiene **5 ramas ejecutables**, cada una representando una fase de desarrollo:
+
+### 📌 Matriz de Versiones
+
+| Rama | Estado | Características | Cómo Ejecutar |
+|------|--------|-----------------|---------------|
+| **main** | Producción (Fase 1) | Versión inicial básica, CLI interactivo | `git checkout main && python main.py --consola` |
+| **version1** | Estable | Copia de main, versión de referencia | `git checkout version1 && python main.py --consola` |
+| **version2** | Desarrollo Avanzado | CLI mejorado + servicios + API dólar + pruebas | `git checkout version2 && python main.py --consola` |
+| **version3** | **ACTUAL (GUI)** | GUI Tkinter + reportes por folio + todas las mejoras | `git checkout version3 && python main.py` |
+| **endesarrollo** | Experimental | Rama de trabajo (sincronizada con version2) | `git checkout endesarrollo && python main.py --consola` |
+
+---
+
+## Instalación y Ejecución
+
+### Prerrequisitos
+
+- Python 3.10 o superior (compatible con 3.14)
+- pip (gestor de paquetes de Python)
+
+### Paso 1: Clonar el Repositorio
+
+```powershell
+git clone https://github.com/durfe01/CINE.git
+cd CINE
+```
+
+### Paso 2: Instalar Dependencias
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### Paso 3: Elegir y Ejecutar una Versión
+
+#### Versión 3.0 (GUI Tkinter — **RECOMENDADA**)
+```powershell
+git checkout version3
 python main.py
 ```
-
-- Al iniciar, el programa **crea la base de datos `cine.db` y sus tablas si no existen**.
-- Si la base está vacía, ofrece cargar **datos de ejemplo** para probar el programa: 3 películas, 3 funciones
-  (2D, 3D y VIP con cupo de 3 asientos), 4 productos (2 importados), 1 boletero, 1 encargado de dulcería y
-  2 clientes (`11.111.111-1`, 25 años, y `22.222.222-2`, 15 años).
-- La base de datos no se sube al repositorio (`.gitignore`). Para partir de cero basta con borrar `cine.db`.
-
-## 2. Estructura del proyecto
-
-```
-cine-estrella/
-├── main.py              Menús de consola: CRUD, ventas, cotización y simulación de caída de la API
-├── validaciones.py      Lectura validada de lo que escribe el usuario (tipo, formato y rango)
-├── datos_ejemplo.py     Datos de ejemplo para probar el programa
-├── requirements.txt
-├── model/               Clases del diagrama, una por archivo (sin SQL)
-│   ├── cliente.py, venta.py, detalle_venta.py, item_venta.py, entrada.py, producto_dulceria.py
-│   ├── indicador_dolar.py, pelicula.py, funcion.py, funcion_2d.py, funcion_3d.py, funcion_vip.py
-│   ├── trabajador.py, boletero.py, encargado_dulceria.py
-│   ├── sin_asientos_error.py, edad_no_permitida_error.py   (excepciones de las reglas)
-│   └── validacion.py    Funciones de validación que reutilizan los setters
-├── dao/                 Persistencia SQLite, separada del modelo
-│   ├── conexion.py, dao.py (clase base)
-│   └── cliente_dao.py, pelicula_dao.py, funcion_dao.py, producto_dao.py, trabajador_dao.py, venta_dao.py
-├── servicios/
-│   └── mindicador.py    Consulta del dólar con requests y tiempo máximo de espera
-└── docs/                Diagrama de clases corregido (.drawio y .png) e informe corregido de la ES1 (.pdf)
+O en Windows:
+```powershell
+iniciar_cine.bat
 ```
 
-## 3. Requisitos de la ficha y dónde se cumplen
-
-| Requisito | Implementación |
-|---|---|
-| Tres subtipos con un método que se comporta distinto | `Funcion` es abstracta. `Funcion2D`, `Funcion3D` y `FuncionVIP` heredan con `super().__init__()` y sobrescriben `calcular_precio()`. `FuncionVIP` también sobrescribe `asientos_disponibles()` (cupo VIP). El programa nunca pregunta por el tipo para calcular el precio. |
-| Al menos un dato con validación | El RUT del cliente se valida en el setter de `Cliente` (formato y dígito verificador, módulo 11). Todos los atributos son privados y se exponen con `@property`; los setters validan tipo y rango. |
-| Transacción con líneas de detalle | `Venta` se compone de una o más `DetalleVenta`. Cada línea guarda un `ItemVenta` (una `Entrada` o un `ProductoDulceria`), la cantidad, el precio unitario del momento y el trabajador que la vendió. `VentaDAO.insertar()` guarda la venta y sus líneas en una sola transacción. |
-| Dos reglas que impiden una operación | `Funcion.reservar_asiento()` lanza `SinAsientosError` y `Pelicula.verificar_edad()` lanza `EdadNoPermitidaError`. Ambas se capturan con su propio `except` en `main.py`; el programa informa y sigue. |
-| Precio que depende de un indicador externo | `ProductoDulceria.calcular_precio()` usa el `IndicadorDolar` del día si el producto es importado. El valor viene de `ServicioMindicador.obtener_dolar()` (`requests`, `timeout`). |
-| Dos trabajadores con permisos distintos (ES1) | `Boletero` solo puede `vender_entrada()` y `EncargadoDulceria` solo `vender_producto()`. `tiene_permiso()` es polimórfico. |
-
-**CRUD completo** (crear, listar, buscar, modificar y eliminar) de clientes, películas, funciones,
-productos de dulcería y trabajadores. Las ventas se crean y se consultan, pero no se modifican ni se anulan:
-el cliente lo pidió así (respuesta 7 del Anexo 3 del informe de la ES1).
-
-## 4. Modelo: versión corregida del diagrama de la ES1
-
-El código sigue el diagrama corregido que está en [`docs/diagrama_clases.png`](docs/diagrama_clases.png)
-(editable en [`docs/diagrama_clases.drawio`](docs/diagrama_clases.drawio)). El informe corregido de la ES1, con la
-explicación de cada clase y la justificación de cada relación, está en
-[`docs/ES1_114-2A-F2_Cine_corregido.pdf`](docs/ES1_114-2A-F2_Cine_corregido.pdf).
-Respecto de la entrega original de la ES1 se corrigió lo que indicó el docente:
-
-- `Funcion` ya no usa `tipo_formato: str`: ahora hay herencia real (`Funcion2D`, `Funcion3D`, `FuncionVIP`) y polimorfismo.
-- Se agregó `DetalleVenta` (composición `Venta 1 ◆— 1..* DetalleVenta`) y la clase abstracta `ItemVenta`.
-- Se agregó `Cliente` con la validación del RUT.
-- Se quitaron los objetos (`Producto_1`, `Pelicula_2`...): el diagrama es solo de clases.
-- `Entrada—Funcion` y `Funcion—Pelicula` son agregaciones con línea continua y multiplicidad en ambos extremos.
-- Se agregaron las dos excepciones de las reglas del negocio.
-
-## 5. Decisiones de seguridad
-
-### Inyección SQL
-Todas las consultas usan parámetros `?`. Ningún dato del usuario se concatena ni se formatea dentro del SQL:
-el texto de la consulta es siempre fijo y los valores viajan aparte.
-
-```python
-# dao/cliente_dao.py
-self.cursor.execute("SELECT rut, nombre, edad FROM cliente WHERE rut = ?", (rut,))
+#### Versión 2.0 (CLI Avanzado)
+```powershell
+git checkout version2
+python main.py --consola
 ```
 
-Si alguien escribe `' OR '1'='1` como RUT, la validación lo rechaza; y aunque llegara al DAO, SQLite lo
-trataría como un texto que se compara con la columna `rut`, nunca como parte de la consulta.
-
-### Validación de entradas, en tres capas
-1. **Antes de usar el dato** (`validaciones.py`): cada lectura revisa tipo (número entero, decimal, fecha),
-   formato (RUT, `dd-mm-aaaa hh:mm`, texto imprimible) y rango (edad 0-120, caja 1-20, precio, cantidad...).
-   Si el dato no sirve se muestra el motivo y se vuelve a preguntar; el programa no se cae.
-2. **En el modelo**: los atributos son privados y cada setter vuelve a validar. El RUT se valida en
-   `Cliente.rut` (setter) con `validar_rut()`, que calcula el dígito verificador con módulo 11. Así, ningún
-   objeto puede quedar con datos inválidos, venga de donde venga el dato.
-3. **En la base de datos**: claves foráneas activadas (`PRAGMA foreign_keys = ON`) y restricciones `CHECK`
-   (por ejemplo, `asientos_vendidos` nunca supera `asientos_totales`). Por eso no se puede borrar una película
-   con funciones ni una función con entradas vendidas.
-
-### Transacciones
-La venta, sus líneas y la actualización de asientos se guardan dentro de `with self.conexion:`. Si algo
-falla a mitad de camino, SQLite deshace todo (rollback): nunca queda una venta sin sus líneas.
-
-### Manejo de errores
-- Las reglas del negocio tienen excepción propia (`SinAsientosError`, `EdadNoPermitidaError`) y se capturan
-  por separado. No hay ningún `except Exception` genérico que oculte errores.
-- La API tiene su propia excepción (`IndicadorNoDisponibleError`) y se distingue cada falla: tiempo de espera
-  agotado, sin conexión, error HTTP y respuesta con formato inesperado.
-- Si la API no responde, el programa lo informa y sigue: los productos nacionales se siguen vendiendo y los
-  importados quedan bloqueados hasta que la API responda. La opción 9 del menú permite comprobarlo sin
-  desconectar internet: apunta la consulta a una dirección que nunca contesta, con 3 segundos de espera.
-- Si el usuario cierra la entrada (Ctrl+C), el programa cierra la base de datos de forma ordenada.
-
-## 6. Uso de inteligencia artificial
-
-Usamos **Claude (Anthropic)** como asistente para revisar el diagrama corregido, proponer la estructura en
-capas (`model/`, `dao/`, `servicios/`) y generar el código base del proyecto. Cada propuesta la revisamos y la
-probamos con el programa funcionando. Estos son ejemplos concretos de lo que adoptamos, modificamos o
-descartamos, con su razón técnica:
-
-**1. Modificado: tiempo máximo de espera de la API (5 s → 10 s).**
-La primera versión del servicio usaba `timeout=5`, igual que el ejemplo de clases. Al probarlo con la API real,
-una consulta tardó más de 5 segundos y el programa informó una caída que no existía (al reintentar, respondió
-bien). Lo subimos a 10 segundos. Para demostrar la caída se usa una dirección que nunca responde, con 3 segundos,
-para no hacer esperar.
-
-```python
-def __init__(self, url_base: str = URL_BASE, timeout: float = 10):
+#### Versión 1.0 (CLI Básico)
+```powershell
+git checkout version1
+python main.py --consola
 ```
 
-**2. Modificado: consultas armadas con f-string.**
-Una versión de `FuncionDAO` armaba el `SELECT` con un f-string que insertaba una lista fija de columnas:
-
-```python
-# Antes
-self.cursor.execute(f"SELECT {COLUMNAS} FROM funcion f JOIN pelicula p ON p.id = f.pelicula_id "
-                    "WHERE f.id = ?", (id,))
-# Después
-self.cursor.execute(SQL_BUSCAR, (id,))
+#### Main (Versión Inicial)
+```powershell
+git checkout main
+python main.py --consola
 ```
 
-No era inyectable, porque `COLUMNAS` no contiene datos del usuario, pero dejaba una consulta armada con texto,
-un patrón fácil de copiar mal en otra parte. La reemplazamos por consultas completas y constantes
-(`SQL_BUSCAR`, `SQL_LISTAR`). Así ningún `execute()` del proyecto usa f-strings ni concatenación.
+### Credenciales de Demostración
 
-**3. Modificado: dónde se sobrescribe el cupo VIP.**
-La propuesta inicial sobrescribía `hay_asientos()` en `FuncionVIP`. Para mostrar cuántos asientos quedan habría
-sido necesario preguntar `if isinstance(funcion, FuncionVIP)` en el menú, que es el "if sobre el tipo" que
-reemplaza al polimorfismo. Lo cambiamos: `FuncionVIP` sobrescribe `asientos_disponibles()` y `hay_asientos()`
-queda una sola vez en `Funcion`.
+| Rol | Usuario | Contraseña | Acceso |
+|-----|---------|-----------|--------|
+| Administrador | `admin` | `admin` | Gestión completa |
+| Boletero | `boletero1` | `1234` | Venta de entradas |
+| Dulcería | `dulceria1` | `1234` | Venta de confites |
 
-**4. Adoptado: manejo separado de cada falla de la API.**
-El ejemplo de clases leía `respuesta.json()["serie"][0]["valor"]` y capturaba los problemas en `main.py` con
-`except Exception`. La IA propuso revisar el código HTTP con `raise_for_status()` y capturar por separado
-`Timeout`, `ConnectionError`, `HTTPError` y los errores de formato, convirtiéndolos en
-`IndicadorNoDisponibleError`. Lo adoptamos porque un `except` genérico oculta errores de programación y no dice
-qué falló. Además, `IndicadorDolar` valida el valor recibido (un dólar en 0 o negativo se rechaza).
+---
 
-**5. Descartado: usar el último dólar conocido cuando la API falla.**
-Se evaluó guardar el último valor obtenido y usarlo si la API no responde. Lo descartamos: vendería productos
-con un dólar que no es el del día, que es lo que pidió el cliente. Preferimos informar la falla y bloquear
-solo los productos importados; los nacionales se siguen vendiendo.
+## Estructura del Proyecto
+
+```
+CINE/
+├── README.md                   # Este archivo (documentación)
+├── main.py                     # Punto de entrada (GUI o CLI según rama)
+├── requirements.txt            # Dependencias (requests)
+├── iniciar_cine.bat           # Script de inicio para Windows
+│
+├── model/                      # CAPA DE DOMINIO
+│   ├── cliente.py             # Validación RUT Módulo 11
+│   ├── pelicula.py            # Clasificación de edad
+│   ├── funcion.py             # Clase base abstracta
+│   ├── funcion_2d.py          # Polimorfismo: tipo 2D
+│   ├── funcion_3d.py          # Polimorfismo: tipo 3D
+│   ├── funcion_vip.py         # Polimorfismo: tipo VIP (máx 30 asientos)
+│   ├── producto.py            # Clase base de productos
+│   ├── producto_nacional.py   # Precio fijo en CLP
+│   ├── producto_importado.py  # Precio dinámico USD
+│   ├── trabajador.py          # Hash SHA-256 + salt
+│   ├── boletero.py            # Subclase: venta de entradas
+│   ├── encargado_dulceria.py  # Subclase: venta de confites
+│   ├── venta.py               # Cabecera de venta
+│   ├── detalle_venta.py       # Línea de detalle con trabajador
+│   └── excepciones.py         # Excepciones de negocio
+│
+├── dao/                        # CAPA DE ACCESO A DATOS
+│   ├── conexion.py            # Contexto SQLite + row_factory
+│   ├── db_init.py             # DDL + migración de esquema
+│   ├── cliente_dao.py         # CRUD clientes
+│   ├── pelicula_dao.py        # CRUD películas
+│   ├── funcion_dao.py         # CRUD funciones
+│   ├── producto_dao.py        # CRUD productos
+│   ├── trabajador_dao.py      # CRUD + autenticación
+│   └── venta_dao.py           # Transacciones atómicas
+│
+├── service/                    # CAPA DE LÓGICA DE NEGOCIO
+│   ├── auth_service.py        # Autenticación y sesión
+│   ├── tipo_cambio_service.py # API mindicador.cl (USD)
+│   └── venta_service.py       # Orquestación de ventas
+│
+├── ui/                         # CAPA DE PRESENTACIÓN (Tkinter Moderno)
+│   ├── ventana_login.py       # Pantalla de autenticación y selección de rol
+│   ├── ventana_principal.py   # Dashboard principal
+│   ├── ventana_admin.py       # Panel administrativo y auditoría
+│   ├── ventana_boleteria.py   # Interfaz de boletería y mapa de asientos
+│   ├── ventana_dulceria.py    # Interfaz de confitería y dólar en tiempo real
+│   ├── ventana_cuadratura.py  # Cuadraturas por trabajador
+│   ├── base.py, componentes.py# Widgets y base para ventanas
+│   ├── fondos.py              # Cargador dinámico de fondos Pillow
+│   └── estilos.py             # Tema corporativo (colores, fuentes)
+│
+├── fondos/                     # FONDOS VISUALES TEMÁTICOS (.jpg)
+│   ├── fondo_principal.jpg, fondo_boleteria.jpg, fondo_confiteria.jpg, fondo_admin.jpg
+│
+├── tests/                      # SUITE DE PRUEBAS AUTOMATIZADAS (31/31 OK)
+│   ├── test_models.py         # Herencia, polimorfismo, RUT
+│   ├── test_dao.py            # CRUD, transacciones, rollback
+│   ├── test_services.py       # Mocks de API externa
+│   └── test_guion_pruebas_p01_p19.py # Aceptación funcional
+│
+├── docs/                       # MANUALES Y DOCUMENTACIÓN TÉCNICA
+│   ├── manual_usuario.md      # Manual de usuario organizado por funciones
+│   ├── manual_tecnico_codigo.md # Manual técnico de arquitectura y clases
+│   └── referencia_comentarios_codigo.md # Matriz de comentarios en el código
+│
+└── .github/workflows/
+    └── tests.yml              # CI/CD: Pruebas automáticas en GitHub
+```
+
+---
+
+## Historial de Cambios
+
+### 📍 Línea de Tiempo de Desarrollo
+
+```
+28-Sep-2026 ── Initial Commit (Repositorio vacío)
+    │
+04-Oct-2026 ── Primer Commit: Proyecto CINE (Versión 1 - CLI Básico)
+    │          • Modelo de dominio (cliente, película, función, producto)
+    │          • DAO con SQLite
+    │          • Menús de consola interactivos
+    │          • Validación de edad y RUT
+    │
+05-Oct-2026 ── Version 2 (CLI Avanzado) — Rama "endesarrollo"
+    │          • feat: Modelo dominio + DAO + pruebas unitarias (02:07)
+    │          • feat: Servicios de negocio + API dólar + CLI (02:15)
+    │          • docs: README formal + manual de trazabilidad (02:32)
+    │          • test: Suite de aceptación P01-P19 (02:37)
+    │          • Se crea proyecto CINE (112e128) (02:48)
+    │          ✓ 16/16 pruebas exitosas
+    │
+05-Oct-2026 ── Version 3 (GUI Tkinter) — Rama "version3" ⭐ ACTUAL
+               • feat: GUI corporativa Tkinter (78c6dca) (04:12)
+               • ci: Workflow GitHub Actions (506fb5f) (04:15)
+               • feat: 14 modificaciones solicitadas (1f0463f) (05:27)
+               • Se crea versión 3 (ff6a2d3) (05:34)
+               • fix: Admin no eliminable + reportes por folio (a6d7c02) (06:06)
+               • fix: Eliminar acceso rápido + ocultar passwords (c30d84b) (06:42)
+               • docs: Actualizar README con historial versiones (2ee3cff) (15:39) ← AQUÍ ESTAMOS
+```
+
+### 🔄 Evolución de Características por Versión
+
+| Característica | main | version1 | version2 | endesarrollo | version3 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Modelo de Dominio | ✓ | ✓ | ✓ | ✓ | ✓ |
+| DAO + SQLite | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CLI Interactivo | ✓ | ✓ | ✓ | ✓ | ✗ |
+| Interfaz Gráfica GUI | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Servicios (Auth, API) | ✗ | ✗ | ✓ | ✓ | ✓ |
+| API Mindicador (USD) | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Pruebas Unitarias | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Pruebas de Aceptación | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Reportes por Folio | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Admin No Eliminable | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Ocultar Passwords | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Descuento Asientos Real | ✗ | ✗ | ✗ | ✗ | **✓** |
+| CI/CD (GitHub Actions) | ✗ | ✗ | ✗ | ✗ | **✓** |
+
+---
+
+## Funcionalidades
+
+### 👨‍💼 Rol: Administrador
+
+- **Gestión de Películas:** CRUD + validación de clasificación de edad
+- **Gestión de Funciones:** Crear funciones 2D, 3D o VIP (con cálculo polimórfico de precios)
+- **Gestión de Productos:** Registrar artículos nacionales (CLP) e importados (USD)
+- **Gestión de Trabajadores:** Crear y modificar usuarios con roles específicos
+- **Reportes de Ventas:** Listado por folio con detalle automático de líneas
+- **Cuadratura General:** Resumen de recaudación por trabajador
+- **Consulta de Dólar:** Valor oficial en tiempo real desde mindicador.cl
+
+### 🎫 Rol: Boletero
+
+- **Mapa de Ocupación:** Barra ASCII con porcentaje de asientos vendidos
+- **Venta de Entradas:** Con validación de edad (RUT Módulo 11) para películas clasificadas
+- **Venta Compartida:** Combinar entradas + confites en una misma transacción
+- **Cuadratura de Caja:** Total recaudado + cantidad de entradas emitidas
+
+### 🍿 Rol: Encargado de Dulcería
+
+- **Catálogo de Confitería:** Con conversión automática USD → CLP
+- **Venta de Productos:** Múltiples artículos en una transacción
+- **Cuadratura de Caja:** Total recaudado + cantidad de productos vendidos
+
+---
+
+## Seguridad
+
+1. **Prevención de Inyección SQL:** Consultas parametrizadas en todas las DAO
+2. **Hash de Contraseñas:** SHA-256 + salt criptográfico aleatorio
+3. **Encapsulamiento Estricto:** Atributos privados con `@property`
+4. **Integridad Referencial:** `PRAGMA foreign_keys = ON` en SQLite
+5. **Transacciones Atómicas:** Ventas con ACID compliance
+6. **Manejo de Errores:** Excepciones sin crash del sistema
+
+---
+
+## Pruebas
+
+### Ejecución de Pruebas Automatizadas
+
+```powershell
+python -m unittest discover tests
+```
+
+**Resultado esperado:** 16/16 pruebas exitosas
+
+### Cobertura
+
+- Herencia y polimorfismo en funciones
+- Validación de RUT (Módulo 11)
+- CRUD de entidades
+- Transacciones y rollback
+- Integración con API externa (mocked)
+- Aceptación funcional (guión P01–P19)
+
+---
+
+## Requisitos de Sistema
+
+- **Lenguaje:** Python 3.10+
+- **GUI:** Tkinter (incluido en Python)
+- **Base de Datos:** SQLite 3 (incluido en Python)
+- **Dependencia Externa:** `requests>=2.28.0`
+
+---
+
+## Próximas Mejoras
+
+- [ ] Integración con sistema de pagos (WebPay, POS)
+- [ ] Reportes en PDF con QR de folio
+- [ ] Sincronización en la nube
+- [ ] Aplicación móvil para consultas
+- [ ] Multi-idioma (ES/EN)
+
+---
+
+## Contacto y Soporte
+
+**Institución:** INACAP — Sede Puente Alto  
+**Docente:** Michael Alexis Arjel Mayerovich  
+**Asignatura:** Programación Orientada a Objetos Segura (2026)
+
+---
+
+**Última actualización:** 5 de Octubre de 2026

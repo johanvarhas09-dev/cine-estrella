@@ -1,10 +1,7 @@
-# Python
 __pycache__/
 *.py[cod]
-
-# Entornos virtuales
-venv/
-.venv/
-
-# Base de datos local: el programa la crea al iniciar
-cine.db
+*$py.class
+*.sqlite3
+.pytest_cache/
+.coverage
+htmlcov/
